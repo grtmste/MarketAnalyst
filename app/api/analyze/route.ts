@@ -10,14 +10,20 @@ function fmt(n: number | null | undefined, digits = 4): string {
 }
 
 export async function POST(req: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const isPlaceholder = !apiKey || apiKey.startsWith('sk-ant-your') || apiKey === 'your_key_here';
+
+  if (isPlaceholder) {
     return Response.json(
-      { error: 'ANTHROPIC_API_KEY missing — add it to .env.local and restart the dev server' },
+      {
+        error:
+          'ANTHROPIC_API_KEY is not set. Create a real key at console.anthropic.com, paste it into .env.local as ANTHROPIC_API_KEY=sk-ant-..., then restart the dev server (Ctrl+C → npm run dev). Note: .env.local is a hidden file — use "ls -la" in the project root to confirm it exists.',
+      },
       { status: 500 }
     );
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = new Anthropic({ apiKey });
 
   try {
     const body = await req.json();
