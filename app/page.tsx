@@ -4,14 +4,21 @@ import { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { useCompletion } from 'ai/react';
 import AnalysisPanel from '@/components/AnalysisPanel';
-import TickerInput from '@/components/TickerInput';
+import TickerSearch from '@/components/TickerSearch';
 import TimeframeSelector from '@/components/TimeframeSelector';
 import type { OHLCVData, TradingAnalysis, Timeframe } from '@/types';
 
 const TradingChart = dynamic(() => import('@/components/TradingChart'), { ssr: false });
 
+function formatDisplayPrice(price: number): string {
+  if (price >= 10000) return price.toFixed(0);
+  if (price >= 100) return price.toFixed(2);
+  return price.toFixed(4);
+}
+
 export default function Home() {
   const [ticker, setTicker] = useState('AAPL');
+  const [displayTicker, setDisplayTicker] = useState('AAPL');
   const [timeframe, setTimeframe] = useState<Timeframe>('1D');
   const [chartData, setChartData] = useState<OHLCVData[]>([]);
   const [currentPrice, setCurrentPrice] = useState<number | undefined>();
@@ -25,13 +32,12 @@ export default function Home() {
     onFinish: (_, completion) => {
       setParseError(null);
       try {
-        const trimmed = completion.trim();
-        // Strip any markdown code fences Claude might add despite instructions
-        const clean = trimmed.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-        const data = JSON.parse(clean) as TradingAnalysis;
-        setAnalysis(data);
+        const clean = completion
+          .trim()
+          .replace(/^```(?:json)?\n?/, '')
+          .replace(/\n?```$/, '');
+        setAnalysis(JSON.parse(clean) as TradingAnalysis);
       } catch {
-        // Try to extract JSON object from arbitrary text
         const match = completion.match(/\{[\s\S]*\}/);
         if (match) {
           try {
@@ -58,6 +64,7 @@ export default function Home() {
       setChartData(json.candles as OHLCVData[]);
       setCurrentPrice(json.currentPrice);
       setAnalysis(null);
+      setDisplayTicker(json.ticker ?? symbol.toUpperCase());
     } catch (err: unknown) {
       setDataError(err instanceof Error ? err.message : 'Unknown error');
       setChartData([]);
@@ -71,6 +78,10 @@ export default function Home() {
     fetchChartData(ticker, timeframe);
   }, [ticker, timeframe, fetchChartData]);
 
+  const handleTickerSelect = (symbol: string) => {
+    setTicker(symbol);
+  };
+
   const handleAnalyze = () => {
     if (!ticker || isAnalyzing || isLoadingData) return;
     setAnalysis(null);
@@ -78,87 +89,98 @@ export default function Home() {
     complete('', { body: { ticker, timeframe } });
   };
 
-  const analysisError =
-    parseError ?? (aiError ? aiError.message : null);
-
+  const analysisError = parseError ?? (aiError ? aiError.message : null);
   const isBusy = isLoadingData || isAnalyzing;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[#0a0f1e]">
-      {/* Header */}
-      <header className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-[#0f172a] border-b border-[#1e293b]">
+    <div className="h-screen flex flex-col overflow-hidden">
+      {/* ── Header ── */}
+      <header className="flex-shrink-0 flex items-center justify-between gap-3 px-4 py-3 bg-white border-b border-[rgba(0,0,0,0.06)] shadow-sm">
         {/* Brand */}
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-blue-600 flex items-center justify-center text-xs font-bold">
-            M
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-[#7C9CBF] flex items-center justify-center shadow-sm">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
           </div>
-          <span className="text-sm font-semibold tracking-wide text-slate-100 hidden sm:block">
+          <span className="text-sm font-bold text-[#1A1A2E] tracking-tight hidden sm:block">
             MarketAnalyst
           </span>
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-2 flex-wrap justify-center">
-          <TickerInput value={ticker} onSubmit={setTicker} disabled={isBusy} />
-          <TimeframeSelector
-            value={timeframe}
-            onChange={setTimeframe}
-            disabled={isBusy}
-          />
+        <div className="flex items-center gap-2 flex-wrap justify-center min-w-0">
+          <TickerSearch value={displayTicker} onSelect={handleTickerSelect} disabled={isBusy} />
+          <TimeframeSelector value={timeframe} onChange={setTimeframe} disabled={isBusy} />
           <button
             onClick={handleAnalyze}
             disabled={isBusy || chartData.length === 0}
             className="
-              flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold
-              bg-blue-600 hover:bg-blue-500 text-white
-              disabled:opacity-40 disabled:cursor-not-allowed
-              transition-all duration-150 shadow-md shadow-blue-900/30
-              whitespace-nowrap
+              flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold
+              bg-[#7C9CBF] hover:bg-[#6b8aad] active:bg-[#5e7a9a]
+              text-white shadow-sm hover:shadow-md
+              disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
+              transition-all duration-150 whitespace-nowrap flex-shrink-0
             "
           >
             {isAnalyzing ? (
               <>
-                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 Analyzing…
               </>
             ) : (
               <>
-                <span>🤖</span>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .03 2.698-1.317 2.698H4.115c-1.347 0-2.317-1.698-1.317-2.698L4.2 15.3" />
+                </svg>
                 Analyze Chart
               </>
             )}
           </button>
         </div>
 
-        {/* Status */}
-        <div className="flex items-center gap-2 hidden sm:flex">
+        {/* Live price badge */}
+        <div className="flex items-center gap-2 flex-shrink-0 hidden sm:flex">
           {currentPrice && !isLoadingData && (
-            <span className="text-xs font-mono text-slate-300">
-              {ticker} <span className="text-blue-400">${currentPrice >= 10000 ? currentPrice.toFixed(0) : currentPrice >= 100 ? currentPrice.toFixed(2) : currentPrice.toFixed(4)}</span>
-            </span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F0EEF0] rounded-xl">
+              <span className="text-xs font-semibold text-[#1A1A2E]">{displayTicker}</span>
+              <span className="text-xs font-mono font-bold text-[#7C9CBF]">
+                ${formatDisplayPrice(currentPrice)}
+              </span>
+            </div>
           )}
-          <div className={`w-1.5 h-1.5 rounded-full ${isBusy ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`} />
+          <div
+            title={isBusy ? 'Loading…' : 'Live'}
+            className={`w-2 h-2 rounded-full transition-colors ${
+              isBusy ? 'bg-amber-400 animate-pulse' : 'bg-[#4CAF7D]'
+            }`}
+          />
         </div>
       </header>
 
       {/* Error banner */}
       {dataError && (
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-red-950/50 border-b border-red-900/50 text-red-300 text-xs">
-          <span>⚠</span>
-          <span>{dataError}</span>
+        <div className="flex-shrink-0 flex items-center gap-2.5 px-4 py-2.5 bg-[#E07070]/8 border-b border-[#E07070]/15 text-[#c45c5c] text-xs">
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <span className="flex-1">{dataError}</span>
           <button
             onClick={() => fetchChartData(ticker, timeframe)}
-            className="ml-auto underline hover:no-underline"
+            className="underline hover:no-underline font-medium"
           >
             Retry
           </button>
         </div>
       )}
 
-      {/* Main content */}
-      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-        {/* Chart — 70% on desktop */}
-        <div className="flex-1 min-h-0 lg:min-h-full border-b lg:border-b-0 lg:border-r border-[#1e293b]" style={{ minHeight: '55vh' }}>
+      {/* ── Main content ── */}
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 p-3 gap-3">
+        {/* Chart card — ~70% */}
+        <div
+          className="flex-1 min-h-0 bg-[#FAFAFA] rounded-2xl border border-[rgba(0,0,0,0.06)] shadow-card overflow-hidden"
+          style={{ minHeight: '55vh' }}
+        >
           <TradingChart
             data={chartData}
             stopLoss={analysis?.stopLoss}
@@ -167,24 +189,27 @@ export default function Home() {
           />
         </div>
 
-        {/* Analysis panel — 30% on desktop */}
-        <div className="flex-shrink-0 lg:w-80 xl:w-96 bg-[#0a0f1e] overflow-hidden" style={{ minHeight: '45vh' }}>
+        {/* Analysis panel — ~30% */}
+        <div
+          className="flex-shrink-0 lg:w-80 xl:w-96 overflow-hidden"
+          style={{ minHeight: '45vh' }}
+        >
           <AnalysisPanel
             analysis={analysis}
             isLoading={isAnalyzing}
             error={analysisError}
-            ticker={ticker}
+            ticker={displayTicker}
             currentPrice={currentPrice}
           />
         </div>
       </main>
 
-      {/* Footer disclaimer */}
-      <footer className="flex-shrink-0 px-4 py-1.5 bg-[#0f172a] border-t border-[#1e293b]">
-        <p className="text-center text-xs text-slate-600">
-          ⚠ <span className="font-medium text-slate-500">Disclaimer:</span> MarketAnalyst is for
-          educational and informational purposes only. This is not financial advice. Never trade with
-          money you cannot afford to lose. Past performance does not guarantee future results.
+      {/* ── Footer ── */}
+      <footer className="flex-shrink-0 px-4 py-2 bg-white border-t border-[rgba(0,0,0,0.06)]">
+        <p className="text-center text-[11px] text-[#6B7280]">
+          <span className="font-medium text-[#1A1A2E]">⚠ Disclaimer:</span> MarketAnalyst is for
+          educational purposes only — not financial advice. Never risk money you cannot afford to
+          lose.
         </p>
       </footer>
     </div>

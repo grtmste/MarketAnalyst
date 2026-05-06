@@ -33,24 +33,25 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: '#0a0f1e' },
-        textColor: '#64748b',
+        background: { color: '#FAFAFA' },
+        textColor: '#6B7280',
+        fontSize: 11,
       },
       grid: {
-        vertLines: { color: '#0f172a' },
-        horzLines: { color: '#0f172a' },
+        vertLines: { color: 'rgba(0,0,0,0.04)' },
+        horzLines: { color: 'rgba(0,0,0,0.04)' },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: '#334155', labelBackgroundColor: '#1e293b' },
-        horzLine: { color: '#334155', labelBackgroundColor: '#1e293b' },
+        vertLine: { color: '#7C9CBF', labelBackgroundColor: '#7C9CBF' },
+        horzLine: { color: '#7C9CBF', labelBackgroundColor: '#7C9CBF' },
       },
       rightPriceScale: {
-        borderColor: '#1e293b',
-        textColor: '#64748b',
+        borderColor: 'rgba(0,0,0,0.06)',
+        textColor: '#6B7280',
       },
       timeScale: {
-        borderColor: '#1e293b',
+        borderColor: 'rgba(0,0,0,0.06)',
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 5,
@@ -60,27 +61,25 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
+      upColor: '#4CAF7D',
+      downColor: '#E07070',
+      borderUpColor: '#4CAF7D',
+      borderDownColor: '#E07070',
+      wickUpColor: '#4CAF7D',
+      wickDownColor: '#E07070',
     } as Partial<CandlestickSeriesOptions>);
 
     chartRef.current = chart;
     seriesRef.current = candleSeries;
 
-    const handleResize = () => {
+    const resizeObserver = new ResizeObserver(() => {
       if (containerRef.current) {
         chart.applyOptions({
           width: containerRef.current.clientWidth,
           height: containerRef.current.clientHeight,
         });
       }
-    };
-
-    const resizeObserver = new ResizeObserver(handleResize);
+    });
     resizeObserver.observe(containerRef.current);
 
     return () => {
@@ -96,7 +95,6 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
   // Update candlestick data
   useEffect(() => {
     if (!seriesRef.current || data.length === 0) return;
-
     seriesRef.current.setData(
       data.map((c) => ({
         time: c.time as UTCTimestamp,
@@ -106,7 +104,6 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
         close: c.close,
       }))
     );
-
     chartRef.current?.timeScale().fitContent();
   }, [data]);
 
@@ -126,18 +123,17 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
     if (stopLoss !== undefined) {
       slLineRef.current = seriesRef.current.createPriceLine({
         price: stopLoss,
-        color: '#ef4444',
+        color: '#E07070',
         lineWidth: 2,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
         title: ' SL',
       });
     }
-
     if (takeProfit !== undefined) {
       tpLineRef.current = seriesRef.current.createPriceLine({
         price: takeProfit,
-        color: '#22c55e',
+        color: '#4CAF7D',
         lineWidth: 2,
         lineStyle: LineStyle.Dashed,
         axisLabelVisible: true,
@@ -149,20 +145,32 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
+
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#0a0f1e]/80 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-[#FAFAFA]/80 backdrop-blur-sm rounded-2xl">
           <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs text-slate-400">Loading market data…</span>
+            <div className="w-9 h-9 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-brand-secondary">Loading market data…</span>
           </div>
         </div>
       )}
+
       {!isLoading && data.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <div className="text-4xl mb-3 opacity-20">📈</div>
-            <p className="text-slate-500 text-sm">Enter a ticker symbol to load chart data</p>
-            <p className="text-slate-600 text-xs mt-1">e.g. AAPL, BTC-USD, SAP.DE</p>
+            <div className="w-16 h-16 rounded-2xl bg-[#F0EEF0] flex items-center justify-center mx-auto mb-4">
+              <svg
+                className="w-8 h-8 text-[#C0C0C8]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.5}
+              >
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+            </div>
+            <p className="text-brand-primary font-medium text-sm">Search for a symbol to begin</p>
+            <p className="text-brand-secondary text-xs mt-1">e.g. AAPL · BTC-USD · SAP.DE · 9988.HK</p>
           </div>
         </div>
       )}

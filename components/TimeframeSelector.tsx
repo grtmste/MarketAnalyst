@@ -19,18 +19,18 @@ interface Props {
 
 export default function TimeframeSelector({ value, onChange, disabled }: Props) {
   return (
-    <div className="flex items-center gap-0.5 bg-[#0f172a] rounded border border-[#1e293b] p-0.5">
+    <div className="flex items-center gap-0.5 bg-[#F0EEF0] rounded-xl border border-[rgba(0,0,0,0.06)] p-0.5">
       {TIMEFRAMES.map((tf) => (
         <button
           key={tf.value}
           onClick={() => onChange(tf.value)}
           disabled={disabled}
           className={`
-            px-2.5 py-1 text-xs font-medium rounded transition-all duration-150
+            px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150
             ${
               value === tf.value
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-900/50'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-[#1e293b]'
+                ? 'bg-[#7C9CBF] text-white shadow-sm'
+                : 'text-[#6B7280] hover:text-[#1A1A2E] hover:bg-white/60'
             }
             disabled:opacity-40 disabled:cursor-not-allowed
           `}

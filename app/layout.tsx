@@ -1,5 +1,12 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'MarketAnalyst — AI Day Trading Assistant',
@@ -9,8 +16,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-[#0a0f1e] text-slate-100 antialiased">{children}</body>
+    <html lang="en" className={inter.variable}>
+      <body className="font-sans antialiased">{children}</body>
     </html>
   );
 }

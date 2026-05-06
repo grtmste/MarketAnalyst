@@ -11,6 +11,13 @@ function fmt(n: number | null | undefined, digits = 4): string {
 }
 
 export async function POST(request: NextRequest) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: 'ANTHROPIC_API_KEY is not configured on the server. Add it to .env.local.' }),
+      { status: 500 }
+    );
+  }
+
   try {
     const body = await request.json();
     const { ticker, timeframe = '1D' } = body as { ticker: string; timeframe: string };

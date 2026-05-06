@@ -2,16 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
-
 :root {
-  --terminal-bg: #0a0f1e;
-  --terminal-panel: #0f172a;
-  --terminal-card: #1a2235;
-  --terminal-border: #1e293b;
+  --color-bg: #F0EEF0;
+  --color-surface: #FAFAFA;
+  --color-primary: #1A1A2E;
+  --color-secondary: #6B7280;
+  --color-accent: #7C9CBF;
+  --color-buy: #4CAF7D;
+  --color-sell: #E07070;
+  --color-wait: #B0B0C0;
+  --color-border: rgba(0, 0, 0, 0.06);
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -22,52 +27,48 @@ body {
 }
 
 body {
-  background-color: var(--terminal-bg);
-  color: #f1f5f9;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  /* Soft pastel gray base with barely-visible diagonal line texture */
+  background-color: #F0EEF0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M-2,2 l4,-4 M0,10 l10,-10 M8,12 l4,-4' stroke='%23D8D5D8' stroke-width='0.7' fill='none'/%3E%3C/svg%3E");
+  color: #1A1A2E;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Custom scrollbar */
+/* Scrollbar — subtle, matches the light theme */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--terminal-panel);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 2px;
+  background: #C8C5C8;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #A8A5A8;
 }
 
-/* Pulse animation for loading indicator */
+/* Animations */
 @keyframes pulse-glow {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
 }
 
 .pulse-glow {
   animation: pulse-glow 1.5s ease-in-out infinite;
 }
 
-/* Trading terminal scan line effect */
-@keyframes scan {
-  0% {
-    transform: translateY(-100%);
-  }
-  100% {
-    transform: translateY(100vh);
-  }
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-up {
+  animation: fade-in-up 0.25s ease-out both;
 }
