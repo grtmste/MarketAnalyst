@@ -18,9 +18,18 @@ interface Props {
   stopLoss?: number;
   takeProfit?: number;
   isLoading?: boolean;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
-export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: Props) {
+export default function TradingChart({
+  data,
+  stopLoss,
+  takeProfit,
+  isLoading,
+  onRefresh,
+  isRefreshing,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -92,7 +101,7 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
     };
   }, []);
 
-  // Update candlestick data
+  // Update candlestick data and scroll to latest
   useEffect(() => {
     if (!seriesRef.current || data.length === 0) return;
     seriesRef.current.setData(
@@ -104,7 +113,8 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
         close: c.close,
       }))
     );
-    chartRef.current?.timeScale().fitContent();
+    // Show the most recent candle at the right edge
+    chartRef.current?.timeScale().scrollToRealTime();
   }, [data]);
 
   // Update SL/TP price lines
@@ -146,6 +156,37 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
 
+      {/* Refresh button */}
+      {onRefresh && (
+        <button
+          onClick={onRefresh}
+          disabled={isLoading || isRefreshing}
+          title="Refresh chart data"
+          className="
+            absolute top-3 right-3 z-10
+            w-7 h-7 flex items-center justify-center
+            bg-white rounded-lg border border-[rgba(0,0,0,0.08)]
+            text-[#6B7280] hover:text-[#1A1A2E] hover:border-[rgba(0,0,0,0.15)]
+            shadow-sm hover:shadow transition-all duration-150
+            disabled:opacity-40 disabled:cursor-not-allowed
+          "
+        >
+          <svg
+            className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path
+              strokeLinecap="round"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+        </button>
+      )}
+
+      {/* Loading overlay */}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-[#FAFAFA]/80 backdrop-blur-sm rounded-2xl">
           <div className="flex flex-col items-center gap-3">
@@ -155,6 +196,7 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
         </div>
       )}
 
+      {/* Empty state */}
       {!isLoading && data.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
@@ -170,7 +212,9 @@ export default function TradingChart({ data, stopLoss, takeProfit, isLoading }: 
               </svg>
             </div>
             <p className="text-brand-primary font-medium text-sm">Search for a symbol to begin</p>
-            <p className="text-brand-secondary text-xs mt-1">e.g. AAPL · BTC-USD · SAP.DE · 9988.HK</p>
+            <p className="text-brand-secondary text-xs mt-1">
+              e.g. AAPL · BTC-USD · SAP.DE · 9988.HK
+            </p>
           </div>
         </div>
       )}

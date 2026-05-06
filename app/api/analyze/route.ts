@@ -1,47 +1,47 @@
-import { NextRequest } from 'next/server';
-import { streamText } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
+import Anthropic from '@anthropic-ai/sdk';
 import { fetchOHLCV } from '@/lib/yahooFinance';
 import { computeIndicators } from '@/lib/indicators';
 
-const SYSTEM_PROMPT = `You are an expert day trader and technical analyst. You will receive OHLCV candlestick data along with pre-calculated technical indicators (RSI, MACD, EMA 20/50, Bollinger Bands, ATR) and must analyze them using price action, support/resistance levels, momentum, and trend direction. Respond ONLY with valid JSON matching the specified schema. Be decisive and precise with price levels.`;
+const SYSTEM_PROMPT =
+  'You are an expert day trader and technical analyst. You will receive OHLCV candlestick data along with pre-calculated technical indicators (RSI, MACD, EMA 20/50, Bollinger Bands, ATR) and must analyze them using price action, support/resistance levels, momentum, and trend direction. Respond ONLY with valid JSON matching the specified schema. Be decisive and precise with price levels.';
 
 function fmt(n: number | null | undefined, digits = 4): string {
   return n != null ? n.toFixed(digits) : 'N/A';
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: 'ANTHROPIC_API_KEY is not configured on the server. Add it to .env.local.' }),
+    return Response.json(
+      { error: 'ANTHROPIC_API_KEY missing — add it to .env.local and restart the dev server' },
       { status: 500 }
     );
   }
 
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
   try {
-    const body = await request.json();
+    const body = await req.json();
     const { ticker, timeframe = '1D' } = body as { ticker: string; timeframe: string };
 
     if (!ticker) {
-      return new Response(JSON.stringify({ error: 'Ticker symbol is required' }), { status: 400 });
+      return Response.json({ error: 'Ticker symbol is required' }, { status: 400 });
     }
 
     const allCandles = await fetchOHLCV(ticker, timeframe);
 
     if (allCandles.length < 30) {
-      return new Response(
-        JSON.stringify({ error: 'Insufficient historical data for analysis (need ≥30 candles)' }),
+      return Response.json(
+        { error: 'Insufficient historical data for analysis (need ≥30 candles)' },
         { status: 400 }
       );
     }
 
-    // Use last 100 candles for indicator accuracy, then take last 50 for the prompt
+    // Use last 100 candles for indicator accuracy; send last 50 in the prompt
     const candles = allCandles.slice(-100);
     const indicators = computeIndicators(candles);
     const last50 = candles.slice(-50);
     const currentPrice = candles[candles.length - 1].close;
     const atrValue = indicators.atr ?? 0;
-
     const slFloor = currentPrice - atrValue * 1.5;
     const tpFloor = currentPrice + atrValue * 3;
 
@@ -54,8 +54,7 @@ Timeframe: ${timeframe}
 Last 50 OHLCV Candles (Unix time, oldest → newest):
 ${last50
   .map(
-    (c) =>
-      `T:${c.time} O:${fmt(c.open)} H:${fmt(c.high)} L:${fmt(c.low)} C:${fmt(c.close)} V:${c.volume}`
+    (c) => `T:${c.time} O:${fmt(c.open)} H:${fmt(c.high)} L:${fmt(c.low)} C:${fmt(c.close)} V:${c.volume}`
   )
   .join('\n')}
 
@@ -70,27 +69,40 @@ ATR-validated minimum levels (respect these):
 Stop-loss floor: ${fmt(slFloor)} (entry − ATR×1.5)
 Take-profit floor: ${fmt(tpFloor)} (entry + ATR×3)
 
-Respond with ONLY valid JSON — no markdown, no explanation outside JSON:
+Respond with ONLY valid JSON — no markdown, no explanation outside the JSON object:
 {
   "decision": "BUY" | "SELL" | "WAIT",
   "confidence": <integer 0-100>,
-  "reasoning": "<concise analysis: trend direction, momentum signals, key levels, risk factors>",
+  "reasoning": "<concise multi-point analysis>",
   "stopLoss": <precise price>,
   "takeProfit": <precise price>,
   "riskRewardRatio": <number to 2 decimals>,
   "keyLevels": { "support": <price>, "resistance": <price> }
 }`;
 
-    const streamResult = await streamText({
-      model: anthropic('claude-sonnet-4-6'),
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userPrompt }],
     });
 
-    return streamResult.toDataStreamResponse();
+    const rawText =
+      message.content[0]?.type === 'text' ? message.content[0].text : '';
+
+    // Strip accidental markdown fences
+    const clean = rawText
+      .trim()
+      .replace(/^```(?:json)?\n?/, '')
+      .replace(/\n?```$/, '');
+
+    // Validate it's parseable JSON before returning
+    const analysis = JSON.parse(clean);
+
+    return Response.json(analysis);
   } catch (error: unknown) {
     console.error('Analyze error:', error);
     const message = error instanceof Error ? error.message : 'Analysis failed';
-    return new Response(JSON.stringify({ error: message }), { status: 500 });
+    return Response.json({ error: message }, { status: 500 });
   }
 }

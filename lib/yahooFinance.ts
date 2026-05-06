@@ -1,12 +1,21 @@
 import type { OHLCVData } from '@/types';
 
+// Exact interval/range mappings per Yahoo Finance capabilities
 const INTERVAL_CONFIG: Record<string, { interval: string; range: string }> = {
-  '1m': { interval: '1m', range: '5d' },
-  '5m': { interval: '5m', range: '1mo' },
-  '15m': { interval: '15m', range: '1mo' },
-  '1H': { interval: '1h', range: '3mo' },
-  '4H': { interval: '1h', range: '6mo' },
-  '1D': { interval: '1d', range: '2y' },
+  '1M':  { interval: '1m',  range: '1d'  },
+  '5M':  { interval: '5m',  range: '5d'  },
+  '15M': { interval: '15m', range: '1mo' },
+  '1H':  { interval: '60m', range: '3mo' },
+  '4H':  { interval: '1d',  range: '1y'  }, // Yahoo has no 4H; proxy with daily
+  '1D':  { interval: '1d',  range: '2y'  },
+  '5D':  { interval: '5m',  range: '5d'  },
+  '1W':  { interval: '1d',  range: '1mo' },
+  '3M':  { interval: '1d',  range: '3mo' },
+  '6M':  { interval: '1d',  range: '6mo' },
+  'YTD': { interval: '1d',  range: 'ytd' },
+  '1Y':  { interval: '1d',  range: '1y'  },
+  '5Y':  { interval: '1wk', range: '5y'  },
+  'ALL': { interval: '1mo', range: 'max' },
 };
 
 interface YFChartResult {
@@ -29,35 +38,16 @@ interface YFResponse {
   };
 }
 
-function aggregateTo4H(candles: OHLCVData[]): OHLCVData[] {
-  const result: OHLCVData[] = [];
-  for (let i = 0; i < candles.length; i += 4) {
-    const chunk = candles.slice(i, i + 4);
-    if (chunk.length === 0) continue;
-    result.push({
-      time: chunk[0].time,
-      open: chunk[0].open,
-      high: Math.max(...chunk.map((c) => c.high)),
-      low: Math.min(...chunk.map((c) => c.low)),
-      close: chunk[chunk.length - 1].close,
-      volume: chunk.reduce((sum, c) => sum + c.volume, 0),
-    });
-  }
-  return result;
-}
-
 export async function fetchOHLCV(ticker: string, timeframe: string): Promise<OHLCVData[]> {
   const config = INTERVAL_CONFIG[timeframe] ?? INTERVAL_CONFIG['1D'];
   const symbol = ticker.toUpperCase();
 
-  // Yahoo Finance v8 chart endpoint — called server-side, no CORS issues
   const url = new URL(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`
   );
   url.searchParams.set('interval', config.interval);
   url.searchParams.set('range', config.range);
   url.searchParams.set('includePrePost', 'false');
-  url.searchParams.set('events', 'div,split');
 
   const res = await fetch(url.toString(), {
     headers: {
@@ -66,7 +56,8 @@ export async function fetchOHLCV(ticker: string, timeframe: string): Promise<OHL
       Accept: 'application/json',
       'Accept-Language': 'en-US,en;q=0.9',
     },
-    next: { revalidate: 60 }, // cache for 60s in Next.js
+    // No caching — always fetch latest market data
+    cache: 'no-store',
   });
 
   if (!res.ok) {
@@ -106,9 +97,8 @@ export async function fetchOHLCV(ticker: string, timeframe: string): Promise<OHL
     });
   }
 
-  if (timeframe === '4H') {
-    return aggregateTo4H(candles);
-  }
+  // Always return sorted ascending by time
+  candles.sort((a, b) => a.time - b.time);
 
   return candles;
 }

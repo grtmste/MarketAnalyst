@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOHLCV } from '@/lib/yahooFinance';
 
+// Always return fresh market data — no caching at the route level
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const ticker = searchParams.get('ticker');
   const timeframe = searchParams.get('timeframe') || '1D';
-  const limit = parseInt(searchParams.get('limit') || '200');
+  const limit = parseInt(searchParams.get('limit') || '500');
 
   if (!ticker) {
     return NextResponse.json({ error: 'Ticker symbol is required' }, { status: 400 });
