@@ -15,11 +15,12 @@ import {
 import type { OHLCVData, Timeframe } from '@/types';
 import Logo from './Logo';
 
-// Timeframes backed by intraday (minute-level) candles, where the time-of-day
-// is meaningful. Everything else is backed by daily/weekly/monthly bars whose
-// timestamp is Yahoo's market-open marker, not a real intraday time — show
-// date only for those to avoid a confusing fixed "13:30" tick label.
-const INTRADAY_TIMEFRAMES = new Set<Timeframe>(['1M', '5M', '15M', '1H', '5D']);
+// Timeframes backed by intraday (minute/hour-level) candles, where the
+// time-of-day is meaningful. Everything else is backed by daily/weekly/
+// monthly bars whose timestamp is Yahoo's market-open marker, not a real
+// intraday time — show date only for those to avoid a confusing fixed
+// "13:30" tick label.
+const INTRADAY_TIMEFRAMES = new Set<Timeframe>(['1M', '5M', '15M', '1H', '4H', '5D']);
 
 // Lightweight Charts treats UTCTimestamp values as UTC and formats axis/crosshair
 // labels in UTC by default. `new Date(seconds * 1000)` + the locale formatters

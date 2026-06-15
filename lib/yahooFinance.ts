@@ -1,12 +1,14 @@
 import type { OHLCVData } from '@/types';
 
-// Exact interval/range mappings per Yahoo Finance capabilities
-const INTERVAL_CONFIG: Record<string, { interval: string; range: string }> = {
+// Exact interval/range mappings per Yahoo Finance capabilities.
+// `aggregate` merges N consecutive raw candles (within the same trading day)
+// into one — used to synthesize timeframes Yahoo doesn't offer directly (4H).
+const INTERVAL_CONFIG: Record<string, { interval: string; range: string; aggregate?: number }> = {
   '1M':  { interval: '1m',  range: '1d'  },
   '5M':  { interval: '5m',  range: '5d'  },
   '15M': { interval: '15m', range: '1mo' },
   '1H':  { interval: '60m', range: '3mo' },
-  '4H':  { interval: '1d',  range: '1y'  }, // Yahoo has no 4H; proxy with daily
+  '4H':  { interval: '60m', range: '1y', aggregate: 4 }, // Yahoo has no 4H; build it from four 60m bars
   '1D':  { interval: '1d',  range: '2y'  },
   '5D':  { interval: '5m',  range: '5d'  },
   '1W':  { interval: '1d',  range: '1mo' },
@@ -100,5 +102,42 @@ export async function fetchOHLCV(ticker: string, timeframe: string): Promise<OHL
   // Always return sorted ascending by time
   candles.sort((a, b) => a.time - b.time);
 
+  if (config.aggregate && config.aggregate > 1) {
+    return aggregateCandles(candles, config.aggregate);
+  }
+
   return candles;
+}
+
+// Merge consecutive candles into groups of `groupSize`, restarting at each
+// new trading day so a 4H bar never spans an overnight/weekend gap.
+function aggregateCandles(candles: OHLCVData[], groupSize: number): OHLCVData[] {
+  const result: OHLCVData[] = [];
+  let bucket: OHLCVData[] = [];
+  let currentDay: string | null = null;
+
+  const flush = () => {
+    for (let i = 0; i < bucket.length; i += groupSize) {
+      const chunk = bucket.slice(i, i + groupSize);
+      result.push({
+        time: chunk[0].time,
+        open: chunk[0].open,
+        high: Math.max(...chunk.map((c) => c.high)),
+        low: Math.min(...chunk.map((c) => c.low)),
+        close: chunk[chunk.length - 1].close,
+        volume: chunk.reduce((sum, c) => sum + c.volume, 0),
+      });
+    }
+    bucket = [];
+  };
+
+  for (const candle of candles) {
+    const day = new Date(candle.time * 1000).toISOString().slice(0, 10);
+    if (currentDay !== null && day !== currentDay) flush();
+    currentDay = day;
+    bucket.push(candle);
+  }
+  flush();
+
+  return result;
 }
