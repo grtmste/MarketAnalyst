@@ -98,8 +98,10 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
     onSelect(r.symbol);
   };
 
-  // When the query is empty, browse the alphabetical popular-ticker list instead of search results
-  const activeList = input.trim().length > 0 ? results : POPULAR_TICKERS;
+  // Show live search results when a query has matches; otherwise fall back to
+  // the alphabetical popular list so the dropdown is always browsable.
+  const showingResults = input.trim().length > 0 && results.length > 0;
+  const activeList = showingResults ? results : POPULAR_TICKERS;
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
@@ -164,7 +166,7 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
           disabled={disabled}
           placeholder="Search ticker…"
           className="
-            pl-8 pr-3 py-2 w-52 sm:w-64 rounded-xl text-sm font-medium
+            pl-8 pr-9 py-2 w-52 sm:w-64 rounded-xl text-sm font-medium
             bg-white border border-[rgba(0,0,0,0.08)] text-[#1A1A2E]
             placeholder:text-[#6B7280] placeholder:font-normal
             focus:outline-none focus:border-[#7C9CBF] focus:ring-2 focus:ring-[#7C9CBF]/20
@@ -174,8 +176,41 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
         />
 
         {/* Loading spinner inside input */}
-        {isSearching && (
+        {isSearching ? (
           <div className="absolute right-3 w-3.5 h-3.5 border border-[#7C9CBF] border-t-transparent rounded-full animate-spin" />
+        ) : (
+          /* Dropdown toggle — click to browse the full list without typing */
+          <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={(e) => {
+              e.preventDefault(); // don't steal focus / re-trigger onFocus
+              if (isOpen) {
+                setIsOpen(false);
+              } else {
+                inputRef.current?.focus();
+                setIsOpen(true);
+              }
+            }}
+            disabled={disabled}
+            title="Browse stocks"
+            className="
+              absolute right-2 w-6 h-6 flex items-center justify-center rounded-md
+              text-[#6B7280] hover:text-[#1A1A2E] hover:bg-[#F0EEF0]
+              disabled:opacity-40 disabled:cursor-not-allowed
+              transition-colors duration-150
+            "
+          >
+            <svg
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -184,7 +219,7 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
         <div className="absolute top-full left-0 mt-1.5 w-80 sm:w-96 bg-white rounded-2xl shadow-dropdown border border-[rgba(0,0,0,0.06)] z-50 overflow-hidden">
           <div className="px-4 pt-2.5 pb-1.5 border-b border-[rgba(0,0,0,0.05)]">
             <p className="text-[10px] font-semibold text-[#6B7280] uppercase tracking-widest">
-              {input.trim().length > 0 ? 'Search results' : 'Popular · A–Z'}
+              {showingResults ? 'Search results' : 'Popular · A–Z'}
             </p>
           </div>
           <div className="py-1 max-h-80 overflow-y-auto">
