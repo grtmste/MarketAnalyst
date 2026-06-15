@@ -5,6 +5,7 @@ import {
   createChart,
   CrosshairMode,
   LineStyle,
+  TickMarkType,
   type IChartApi,
   type ISeriesApi,
   type IPriceLine,
@@ -19,6 +20,44 @@ import Logo from './Logo';
 // timestamp is Yahoo's market-open marker, not a real intraday time — show
 // date only for those to avoid a confusing fixed "13:30" tick label.
 const INTRADAY_TIMEFRAMES = new Set<Timeframe>(['1M', '5M', '15M', '1H', '5D']);
+
+// Lightweight Charts treats UTCTimestamp values as UTC and formats axis/crosshair
+// labels in UTC by default. `new Date(seconds * 1000)` + the locale formatters
+// below convert that instant into the viewer's own browser timezone instead.
+function formatTickMark(time: UTCTimestamp, tickMarkType: TickMarkType): string {
+  const date = new Date(time * 1000);
+  switch (tickMarkType) {
+    case TickMarkType.Year:
+      return date.toLocaleDateString(undefined, { year: 'numeric' });
+    case TickMarkType.Month:
+      return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    case TickMarkType.DayOfMonth:
+      return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+    case TickMarkType.Time:
+      return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    case TickMarkType.TimeWithSeconds:
+      return date.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+    default:
+      return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  }
+}
+
+function formatCrosshairTime(time: UTCTimestamp, intraday: boolean): string {
+  const date = new Date(time * 1000);
+  if (intraday) {
+    return date.toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 interface Props {
   data: OHLCVData[];
@@ -81,13 +120,20 @@ export default function TradingChart({
         borderColor: 'rgba(0,0,0,0.06)',
         textColor: '#6B7280',
       },
+      localization: {
+        timeFormatter: (time: UTCTimestamp) =>
+          formatCrosshairTime(time, timeframe ? INTRADAY_TIMEFRAMES.has(timeframe) : true),
+      },
       timeScale: {
         borderColor: 'rgba(0,0,0,0.06)',
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 5,
+        tickMarkFormatter: formatTickMark,
       },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true },
+      // Single-finger touch is left to the page (vertical scroll on mobile);
+      // pinch-to-zoom still works for chart scale via handleScale.pinch.
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: false, vertTouchDrag: false },
       handleScale: { mouseWheel: true, pinch: true },
     });
 
@@ -147,6 +193,9 @@ export default function TradingChart({
     const isIntraday = timeframe ? INTRADAY_TIMEFRAMES.has(timeframe) : true;
     chartRef.current.applyOptions({
       timeScale: { timeVisible: isIntraday, secondsVisible: false },
+      localization: {
+        timeFormatter: (time: UTCTimestamp) => formatCrosshairTime(time, isIntraday),
+      },
     });
   }, [timeframe]);
 
