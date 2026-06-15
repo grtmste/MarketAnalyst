@@ -285,6 +285,7 @@ export default function Home() {
             error={analysisError}
             ticker={displayTicker}
             currentPrice={currentPrice}
+            timeframe={timeframe}
           />
         </div>
       </main>

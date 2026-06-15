@@ -8,6 +8,47 @@ interface Props {
   error: string | null;
   ticker?: string;
   currentPrice?: number;
+  timeframe?: string;
+}
+
+// Human-readable horizon for each timeframe, used in tooltips
+const HORIZON: Record<string, string> = {
+  '1M': '1-minute (scalp)',
+  '5M': '5-minute (scalp)',
+  '15M': '15-minute (intraday)',
+  '1H': '1-hour (intraday)',
+  '4H': '4-hour (swing)',
+  '1D': 'daily (swing)',
+  '5D': '5-day',
+  '1W': 'weekly (position)',
+  '3M': '3-month',
+  '6M': '6-month',
+  YTD: 'year-to-date',
+  '1Y': '1-year (long-term)',
+  '5Y': '5-year (long-term)',
+  ALL: 'all-history (long-term)',
+};
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="relative inline-flex group ml-1.5 align-middle">
+      <span
+        className="w-3.5 h-3.5 flex items-center justify-center rounded-full border border-[#B8B5C0]
+                   text-[#9B98A5] text-[9px] font-bold leading-none cursor-help
+                   hover:border-[#7C9CBF] hover:text-[#7C9CBF] transition-colors"
+      >
+        ?
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute z-50 left-0 top-full mt-1.5 w-52
+                   rounded-lg bg-[#1A1A2E] text-white text-[10px] leading-relaxed p-2.5
+                   opacity-0 group-hover:opacity-100 transition-opacity duration-150 shadow-dropdown"
+      >
+        {text}
+      </span>
+    </span>
+  );
 }
 
 const DECISION_CONFIG = {
@@ -53,10 +94,17 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({
+  children,
+  tooltip,
+}: {
+  children: React.ReactNode;
+  tooltip?: string;
+}) {
   return (
-    <p className="text-[10px] font-semibold text-[#6B7280] uppercase tracking-widest mb-3">
+    <p className="flex items-center text-[10px] font-semibold text-[#6B7280] uppercase tracking-widest mb-3">
       {children}
+      {tooltip && <InfoTooltip text={tooltip} />}
     </p>
   );
 }
@@ -65,14 +113,19 @@ function MetricRow({
   label,
   value,
   valueColor,
+  tooltip,
 }: {
   label: string;
   value: string;
   valueColor?: string;
+  tooltip?: string;
 }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-[rgba(0,0,0,0.04)] last:border-0">
-      <span className="text-xs text-[#6B7280]">{label}</span>
+      <span className="flex items-center text-xs text-[#6B7280]">
+        {label}
+        {tooltip && <InfoTooltip text={tooltip} />}
+      </span>
       <span className={`text-xs font-semibold font-mono ${valueColor ?? 'text-[#1A1A2E]'}`}>
         {value}
       </span>
@@ -80,7 +133,15 @@ function MetricRow({
   );
 }
 
-export default function AnalysisPanel({ analysis, isLoading, error, ticker, currentPrice }: Props) {
+export default function AnalysisPanel({
+  analysis,
+  isLoading,
+  error,
+  ticker,
+  currentPrice,
+  timeframe = '1D',
+}: Props) {
+  const horizon = HORIZON[timeframe] ?? `${timeframe} timeframe`;
   if (isLoading) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-5 p-6">
@@ -93,7 +154,7 @@ export default function AnalysisPanel({ analysis, isLoading, error, ticker, curr
         </div>
         <div className="text-center">
           <p className="text-sm font-semibold text-[#1A1A2E]">Analyzing {ticker}…</p>
-          <p className="text-xs text-[#6B7280] mt-1">Claude is reading the market</p>
+          <p className="text-xs text-[#6B7280] mt-1">Reading the market</p>
         </div>
         <div className="w-full space-y-2.5">
           {['Scanning price action', 'Evaluating indicators', 'Calculating risk levels'].map(
@@ -169,8 +230,11 @@ export default function AnalysisPanel({ analysis, isLoading, error, ticker, curr
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${cfg.dotClass}`} />
-            <span className="text-[10px] font-semibold text-[#6B7280] uppercase tracking-widest">
+            <span className="flex items-center text-[10px] font-semibold text-[#6B7280] uppercase tracking-widest">
               Signal
+              <InfoTooltip
+                text={`The engine's overall call — BUY, SELL, or WAIT — from a weighted blend of 6 technical signals on the ${horizon} chart. WAIT means the signals conflict, so no clear edge.`}
+              />
             </span>
           </div>
           {currentPrice && (
@@ -195,7 +259,9 @@ export default function AnalysisPanel({ analysis, isLoading, error, ticker, curr
 
       {/* Confidence */}
       <Card className="p-4">
-        <SectionLabel>Confidence</SectionLabel>
+        <SectionLabel tooltip="How strongly the 6 signals agree with each other. Higher means more of them point the same way. This is a measure of signal alignment — not a probability of profit.">
+          Confidence
+        </SectionLabel>
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-[#6B7280]">
             {analysis.confidence >= 70
@@ -226,16 +292,20 @@ export default function AnalysisPanel({ analysis, isLoading, error, ticker, curr
 
       {/* Price Levels */}
       <Card className="p-4">
-        <SectionLabel>Price Levels</SectionLabel>
+        <SectionLabel tooltip={`These levels are sized for a ${horizon} trade. They come from ATR(14) — average volatility over the last 14 ${timeframe} candles — so switching the timeframe rescales them.`}>
+          Price Levels
+        </SectionLabel>
         <MetricRow
           label="Stop Loss"
           value={`$${formatPrice(analysis.stopLoss)}`}
           valueColor="text-[#c45c5c]"
+          tooltip={`Suggested exit if the trade goes against you, placed 1.5×ATR from the entry. ATR is measured on the ${horizon} chart, so this stop is tuned for that trade horizon — tighter on 1M, wider on 1D.`}
         />
         <MetricRow
           label="Take Profit"
           value={`$${formatPrice(analysis.takeProfit)}`}
           valueColor="text-[#3a9668]"
+          tooltip={`Suggested exit to lock in gains, placed 3×ATR from the entry on the ${horizon} chart. Twice the distance of the stop, which is what gives the 1:2 risk/reward.`}
         />
         <MetricRow
           label="Risk / Reward"
@@ -243,21 +313,26 @@ export default function AnalysisPanel({ analysis, isLoading, error, ticker, curr
           valueColor={
             analysis.riskRewardRatio >= 2 ? 'text-[#3a9668]' : 'text-[#F0A854]'
           }
+          tooltip="Potential reward versus risk. 1:2 means you aim to make twice what you'd lose if stopped out. A ratio of 1:2 or higher is generally considered favorable."
         />
       </Card>
 
       {/* Key Levels */}
       <Card className="p-4">
-        <SectionLabel>Key Levels</SectionLabel>
+        <SectionLabel tooltip={`Recent price floor and ceiling from the last ~30 ${timeframe} candles, where price has tended to reverse.`}>
+          Key Levels
+        </SectionLabel>
         <MetricRow
           label="Support"
           value={`$${formatPrice(analysis.keyLevels.support)}`}
           valueColor="text-[#7C9CBF]"
+          tooltip={`A price floor — the lowest low of roughly the last 30 ${timeframe} candles — where buyers have tended to step in. A break below it often signals further downside.`}
         />
         <MetricRow
           label="Resistance"
           value={`$${formatPrice(analysis.keyLevels.resistance)}`}
           valueColor="text-[#9B7CBF]"
+          tooltip={`A price ceiling — the highest high of roughly the last 30 ${timeframe} candles — where sellers have tended to step in. A break above it often signals further upside.`}
         />
       </Card>
 
