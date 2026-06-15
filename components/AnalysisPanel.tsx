@@ -271,7 +271,7 @@ export default function AnalysisPanel({ analysis, isLoading, error, ticker, curr
 
       {/* Attribution */}
       <p className="text-center text-[10px] text-[#6B7280] pb-1">
-        Powered by Claude claude-sonnet-4-6
+        Technical analysis engine · RSI · MACD · EMA · Bollinger · ATR
       </p>
     </div>
   );
