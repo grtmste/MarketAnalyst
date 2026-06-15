@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, type KeyboardEvent, type ChangeEvent } from 'react';
+import Logo from './Logo';
 
 export interface SearchResult {
   symbol: string;
@@ -20,6 +21,31 @@ const TYPE_COLORS: Record<string, string> = {
   Fund: 'bg-amber-100 text-amber-700',
   Stock: 'bg-sky-100 text-sky-700',
 };
+
+// Curated cross-market watchlist shown when the search box is focused but empty —
+// sorted alphabetically so it can be browsed like a dropdown.
+const POPULAR_TICKERS: SearchResult[] = [
+  { symbol: '0700.HK', name: 'Tencent Holdings Ltd.', exchange: 'HKEX', type: 'Stock' },
+  { symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ', type: 'Stock' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.', exchange: 'NASDAQ', type: 'Stock' },
+  { symbol: 'ASML.AS', name: 'ASML Holding N.V.', exchange: 'AEX', type: 'Stock' },
+  { symbol: 'BABA', name: 'Alibaba Group Holding', exchange: 'NYSE', type: 'Stock' },
+  { symbol: 'BTC-USD', name: 'Bitcoin USD', exchange: 'CCC', type: 'Stock' },
+  { symbol: 'DIS', name: 'Walt Disney Co.', exchange: 'NYSE', type: 'Stock' },
+  { symbol: 'ETH-USD', name: 'Ethereum USD', exchange: 'CCC', type: 'Stock' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', exchange: 'NASDAQ', type: 'Stock' },
+  { symbol: 'JPM', name: 'JPMorgan Chase & Co.', exchange: 'NYSE', type: 'Stock' },
+  { symbol: 'MC.PA', name: 'LVMH Moët Hennessy', exchange: 'Paris', type: 'Stock' },
+  { symbol: 'META', name: 'Meta Platforms Inc.', exchange: 'NASDAQ', type: 'Stock' },
+  { symbol: 'MSFT', name: 'Microsoft Corp.', exchange: 'NASDAQ', type: 'Stock' },
+  { symbol: 'NFLX', name: 'Netflix Inc.', exchange: 'NASDAQ', type: 'Stock' },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', exchange: 'NASDAQ', type: 'Stock' },
+  { symbol: 'SAP.DE', name: 'SAP SE', exchange: 'XETRA', type: 'Stock' },
+  { symbol: 'SPY', name: 'SPDR S&P 500 ETF Trust', exchange: 'NYSEARCA', type: 'ETF' },
+  { symbol: 'TSLA', name: 'Tesla Inc.', exchange: 'NASDAQ', type: 'Stock' },
+  { symbol: 'TSM', name: 'Taiwan Semiconductor', exchange: 'NYSE', type: 'Stock' },
+  { symbol: 'V', name: 'Visa Inc.', exchange: 'NYSE', type: 'Stock' },
+].sort((a, b) => a.symbol.localeCompare(b.symbol));
 
 export default function TickerSearch({ value, onSelect, disabled }: Props) {
   const [input, setInput] = useState(value);
@@ -60,6 +86,7 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
   const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
     setInput(v);
+    setIsOpen(true);
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => search(v), 300);
   };
@@ -71,17 +98,21 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
     onSelect(r.symbol);
   };
 
+  // When the query is empty, browse the alphabetical popular-ticker list instead of search results
+  const activeList = input.trim().length > 0 ? results : POPULAR_TICKERS;
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+      setIsOpen(true);
+      setActiveIndex((i) => Math.min(i + 1, activeList.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, -1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (activeIndex >= 0 && results[activeIndex]) {
-        handleSelect(results[activeIndex]);
+      if (activeIndex >= 0 && activeList[activeIndex]) {
+        handleSelect(activeList[activeIndex]);
       } else if (input.trim()) {
         setIsOpen(false);
         onSelect(input.trim().toUpperCase());
@@ -129,7 +160,7 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
           value={input}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          onFocus={() => results.length > 0 && setIsOpen(true)}
+          onFocus={() => setIsOpen(true)}
           disabled={disabled}
           placeholder="Search ticker…"
           className="
@@ -149,10 +180,15 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
       </div>
 
       {/* Dropdown */}
-      {isOpen && results.length > 0 && (
-        <div className="absolute top-full left-0 mt-1.5 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-[rgba(0,0,0,0.06)] z-50 overflow-hidden">
-          <div className="py-1">
-            {results.map((result, i) => (
+      {isOpen && activeList.length > 0 && (
+        <div className="absolute top-full left-0 mt-1.5 w-80 sm:w-96 bg-white rounded-2xl shadow-dropdown border border-[rgba(0,0,0,0.06)] z-50 overflow-hidden">
+          <div className="px-4 pt-2.5 pb-1.5 border-b border-[rgba(0,0,0,0.05)]">
+            <p className="text-[10px] font-semibold text-[#6B7280] uppercase tracking-widest">
+              {input.trim().length > 0 ? 'Search results' : 'Popular · A–Z'}
+            </p>
+          </div>
+          <div className="py-1 max-h-80 overflow-y-auto">
+            {activeList.map((result, i) => (
               <button
                 key={result.symbol}
                 onMouseDown={(e) => {
@@ -165,13 +201,9 @@ export default function TickerSearch({ value, onSelect, disabled }: Props) {
                   ${i === activeIndex ? 'bg-[#F0EEF0]' : 'hover:bg-[#F8F8F8]'}
                 `}
               >
-                {/* Left: symbol + name */}
+                {/* Left: logo + symbol + name */}
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-[#F0EEF0] flex items-center justify-center">
-                    <span className="text-xs font-bold text-[#7C9CBF]">
-                      {result.symbol.slice(0, 2)}
-                    </span>
-                  </div>
+                  <Logo symbol={result.symbol} size={32} />
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-[#1A1A2E] leading-tight">
                       {result.symbol}

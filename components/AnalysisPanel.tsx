@@ -1,6 +1,6 @@
 'use client';
 
-import type { TradingAnalysis } from '@/types';
+import type { TradingAnalysis, MultiTimeframeAnalysis, NewsArticle } from '@/types';
 
 interface Props {
   analysis: TradingAnalysis | null;
@@ -9,6 +9,9 @@ interface Props {
   ticker?: string;
   currentPrice?: number;
   timeframe?: string;
+  mtf?: MultiTimeframeAnalysis | null;
+  news?: NewsArticle[];
+  newsLoading?: boolean;
 }
 
 // Human-readable horizon for each timeframe, used in tooltips
@@ -84,6 +87,39 @@ function formatPrice(price: number): string {
   return price.toFixed(4);
 }
 
+function timeAgo(unixSeconds: number): string {
+  if (!unixSeconds) return '';
+  const diffMs = Date.now() - unixSeconds * 1000;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+const ALIGNMENT_CONFIG = {
+  aligned: {
+    textClass: 'text-[#3a9668]',
+    bgClass: 'bg-[#4CAF7D]/8',
+    borderClass: 'border-[#4CAF7D]/20',
+    label: 'Aligned',
+  },
+  partial: {
+    textClass: 'text-[#b8862e]',
+    bgClass: 'bg-[#F0A854]/10',
+    borderClass: 'border-[#F0A854]/25',
+    label: 'Partial',
+  },
+  conflicting: {
+    textClass: 'text-[#c45c5c]',
+    bgClass: 'bg-[#E07070]/8',
+    borderClass: 'border-[#E07070]/20',
+    label: 'Conflicting',
+  },
+} as const;
+
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div
@@ -133,6 +169,92 @@ function MetricRow({
   );
 }
 
+function MultiTimeframeSection({ mtf }: { mtf: MultiTimeframeAnalysis }) {
+  const cfg = ALIGNMENT_CONFIG[mtf.alignment];
+  return (
+    <Card className="p-4">
+      <SectionLabel tooltip="The same signal engine run on three related timeframes — one above, one at, and one below your selection — to check whether they agree. Agreement across timeframes is a stronger signal than any single timeframe alone.">
+        Multi-Timeframe Check
+      </SectionLabel>
+      <div className="space-y-2 mb-3">
+        {mtf.signals.map((s) => {
+          const dCfg = DECISION_CONFIG[s.decision];
+          return (
+            <div key={s.timeframe} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-1.5 h-1.5 rounded-full ${dCfg.dotClass}`} />
+                <span className="text-xs text-[#6B7280]">{s.label}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${dCfg.textClass}`}>{dCfg.label}</span>
+                <span className="text-[10px] font-mono text-[#9B98A5]">{s.confidence}%</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className={`rounded-lg px-3 py-2 border ${cfg.borderClass} ${cfg.bgClass}`}>
+        <p className={`text-[10px] font-semibold uppercase tracking-widest mb-1 ${cfg.textClass}`}>
+          {cfg.label}
+        </p>
+        <p className="text-xs text-[#1A1A2E] leading-relaxed">{mtf.summary}</p>
+      </div>
+    </Card>
+  );
+}
+
+function NewsSection({
+  news,
+  isLoading,
+  ticker,
+}: {
+  news?: NewsArticle[];
+  isLoading?: boolean;
+  ticker?: string;
+}) {
+  return (
+    <Card className="p-4">
+      <SectionLabel tooltip="Recent headlines aggregated from multiple financial news sources (Reuters, Bloomberg, Motley Fool, etc.) that may be moving this stock — useful context before entering a trade.">
+        Latest News
+      </SectionLabel>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="space-y-1.5">
+              <div className="h-3 bg-[#F0EEF0] rounded animate-pulse w-full" />
+              <div className="h-2.5 bg-[#F0EEF0] rounded animate-pulse w-1/3" />
+            </div>
+          ))}
+        </div>
+      ) : !news || news.length === 0 ? (
+        <p className="text-xs text-[#6B7280]">
+          No recent news found{ticker ? ` for ${ticker}` : ''}.
+        </p>
+      ) : (
+        <div className="divide-y divide-[rgba(0,0,0,0.04)]">
+          {news.map((article, i) => (
+            <a
+              key={i}
+              href={article.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block py-2.5 first:pt-0 last:pb-0 group"
+            >
+              <p className="text-xs font-medium text-[#1A1A2E] leading-snug line-clamp-2 group-hover:text-[#7C9CBF] transition-colors">
+                {article.title}
+              </p>
+              <p className="text-[10px] text-[#6B7280] mt-1">
+                {article.publisher}
+                {article.publishedAt ? ` · ${timeAgo(article.publishedAt)}` : ''}
+              </p>
+            </a>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function AnalysisPanel({
   analysis,
   isLoading,
@@ -140,6 +262,9 @@ export default function AnalysisPanel({
   ticker,
   currentPrice,
   timeframe = '1D',
+  mtf,
+  news,
+  newsLoading,
 }: Props) {
   const horizon = HORIZON[timeframe] ?? `${timeframe} timeframe`;
   if (isLoading) {
@@ -188,34 +313,38 @@ export default function AnalysisPanel({
 
   if (!analysis) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6 gap-5">
-        <div className="w-16 h-16 rounded-2xl bg-[#F0EEF0] flex items-center justify-center">
-          <svg className="w-7 h-7 text-[#7C9CBF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .03 2.698-1.317 2.698H4.115c-1.347 0-2.317-1.698-1.317-2.698L4.2 15.3" />
-          </svg>
-        </div>
-        <div className="text-center">
-          <p className="text-sm font-semibold text-[#1A1A2E]">AI Analysis</p>
-          <p className="text-xs text-[#6B7280] mt-1.5 leading-relaxed max-w-[200px]">
-            Click &ldquo;Analyze Chart&rdquo; to receive a trading signal from Claude
-          </p>
-        </div>
-        <Card className="w-full p-4">
-          <div className="space-y-2">
-            {[
-              'Decision — BUY / SELL / WAIT',
-              'Confidence score',
-              'Stop Loss & Take Profit',
-              'Risk / Reward ratio',
-              'Key support & resistance',
-            ].map((item) => (
-              <div key={item} className="flex items-center gap-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#C0C8D8] flex-shrink-0" />
-                <span className="text-xs text-[#6B7280]">{item}</span>
-              </div>
-            ))}
+      <div className="h-full overflow-y-auto p-4 space-y-3 fade-in-up">
+        <div className="flex flex-col items-center justify-center gap-5 py-6">
+          <div className="w-16 h-16 rounded-2xl bg-[#F0EEF0] flex items-center justify-center">
+            <svg className="w-7 h-7 text-[#7C9CBF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .03 2.698-1.317 2.698H4.115c-1.347 0-2.317-1.698-1.317-2.698L4.2 15.3" />
+            </svg>
           </div>
-        </Card>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-[#1A1A2E]">AI Analysis</p>
+            <p className="text-xs text-[#6B7280] mt-1.5 leading-relaxed max-w-[200px]">
+              Click &ldquo;Analyze Chart&rdquo; to receive a trading signal
+            </p>
+          </div>
+          <Card className="w-full p-4">
+            <div className="space-y-2">
+              {[
+                'Decision — BUY / SELL / WAIT',
+                'Confidence score',
+                'Stop Loss & Take Profit',
+                'Risk / Reward ratio',
+                'Key support & resistance',
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-2.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#C0C8D8] flex-shrink-0" />
+                  <span className="text-xs text-[#6B7280]">{item}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+
+        <NewsSection news={news} isLoading={newsLoading} ticker={ticker} />
       </div>
     );
   }
@@ -290,6 +419,9 @@ export default function AnalysisPanel({
         </div>
       </Card>
 
+      {/* Multi-Timeframe Check */}
+      {mtf && <MultiTimeframeSection mtf={mtf} />}
+
       {/* Price Levels */}
       <Card className="p-4">
         <SectionLabel tooltip={`These levels are sized for a ${horizon} trade. They come from ATR(14) — average volatility over the last 14 ${timeframe} candles — so switching the timeframe rescales them.`}>
@@ -343,6 +475,9 @@ export default function AnalysisPanel({
           {analysis.reasoning}
         </p>
       </Card>
+
+      {/* Latest News */}
+      <NewsSection news={news} isLoading={newsLoading} ticker={ticker} />
 
       {/* Attribution */}
       <p className="text-center text-[10px] text-[#6B7280] pb-1">

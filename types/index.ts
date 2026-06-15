@@ -43,3 +43,23 @@ export type Timeframe =
   | '1D' | '5D' | '1W'
   | '3M' | '6M' | 'YTD'
   | '1Y' | '5Y' | 'ALL';
+
+export interface TimeframeSignal {
+  timeframe: Timeframe;
+  label: string;
+  decision: 'BUY' | 'SELL' | 'WAIT';
+  confidence: number;
+}
+
+export interface MultiTimeframeAnalysis {
+  signals: TimeframeSignal[];
+  alignment: 'aligned' | 'partial' | 'conflicting';
+  summary: string;
+}
+
+export interface NewsArticle {
+  title: string;
+  publisher: string;
+  link: string;
+  publishedAt: number;
+}

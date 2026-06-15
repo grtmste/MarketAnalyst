@@ -12,9 +12,11 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { OHLCVData } from '@/types';
+import Logo from './Logo';
 
 interface Props {
   data: OHLCVData[];
+  ticker?: string;
   stopLoss?: number;
   takeProfit?: number;
   isLoading?: boolean;
@@ -24,6 +26,7 @@ interface Props {
 
 export default function TradingChart({
   data,
+  ticker,
   stopLoss,
   takeProfit,
   isLoading,
@@ -155,6 +158,14 @@ export default function TradingChart({
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
+
+      {/* Ticker watermark */}
+      {ticker && data.length > 0 && (
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-2 px-2.5 py-1.5 bg-white/75 backdrop-blur-sm rounded-lg shadow-sm pointer-events-none">
+          <Logo symbol={ticker} size={20} />
+          <span className="text-sm font-bold text-[#1A1A2E]/80 tracking-tight">{ticker}</span>
+        </div>
+      )}
 
       {/* Refresh button */}
       {onRefresh && (

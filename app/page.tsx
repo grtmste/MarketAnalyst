@@ -5,7 +5,13 @@ import dynamic from 'next/dynamic';
 import AnalysisPanel from '@/components/AnalysisPanel';
 import TickerSearch from '@/components/TickerSearch';
 import TimeframeSelector from '@/components/TimeframeSelector';
-import type { OHLCVData, TradingAnalysis, Timeframe } from '@/types';
+import type {
+  OHLCVData,
+  TradingAnalysis,
+  Timeframe,
+  MultiTimeframeAnalysis,
+  NewsArticle,
+} from '@/types';
 
 const TradingChart = dynamic(() => import('@/components/TradingChart'), { ssr: false });
 
@@ -36,8 +42,12 @@ export default function Home() {
   const [currentPrice, setCurrentPrice] = useState<number | undefined>();
 
   const [analysis, setAnalysis] = useState<TradingAnalysis | null>(null);
+  const [mtfAnalysis, setMtfAnalysis] = useState<MultiTimeframeAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const [news, setNews] = useState<NewsArticle[]>([]);
+  const [isLoadingNews, setIsLoadingNews] = useState(false);
 
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -69,7 +79,10 @@ export default function Home() {
         if (!res.ok) throw new Error(json.error || 'Failed to fetch market data');
         setChartData(json.candles as OHLCVData[]);
         setCurrentPrice(json.currentPrice);
-        if (!silent) setAnalysis(null);
+        if (!silent) {
+          setAnalysis(null);
+          setMtfAnalysis(null);
+        }
         setDisplayTicker(json.ticker ?? symbol.toUpperCase());
       } catch (err: unknown) {
         setDataError(err instanceof Error ? err.message : 'Unknown error');
@@ -90,6 +103,28 @@ export default function Home() {
     if (!mounted) return;
     fetchChartData(ticker, timeframe);
   }, [mounted, ticker, timeframe, fetchChartData]);
+
+  // ── Fetch latest news whenever the ticker changes ──
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    setNews([]);
+    setIsLoadingNews(true);
+    fetch(`/api/news?ticker=${encodeURIComponent(ticker)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!cancelled) setNews((json.articles as NewsArticle[]) ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setNews([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingNews(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted, ticker]);
 
   // ── Fix 5: Persist to localStorage on change ──
   const handleTickerSelect = (symbol: string) => {
@@ -118,21 +153,34 @@ export default function Home() {
     return () => clearInterval(autoRefreshRef.current);
   }, [mounted, ticker, timeframe, fetchChartData]);
 
-  // ── Fix 1: Direct fetch for AI analysis (no useCompletion) ──
+  // ── Direct fetch for technical analysis + multi-timeframe check ──
   const handleAnalyze = async () => {
     if (!ticker || isAnalyzing || isLoadingData) return;
     setIsAnalyzing(true);
     setAnalysisError(null);
     setAnalysis(null);
+    setMtfAnalysis(null);
     try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticker, timeframe }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Analysis failed');
+      const [analysisRes, mtfRes] = await Promise.all([
+        fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticker, timeframe }),
+        }),
+        fetch('/api/analyze-mtf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ticker, timeframe }),
+        }),
+      ]);
+      const data = await analysisRes.json();
+      if (!analysisRes.ok) throw new Error(data.error || 'Analysis failed');
       setAnalysis(data as TradingAnalysis);
+
+      if (mtfRes.ok) {
+        const mtfData = await mtfRes.json();
+        setMtfAnalysis(mtfData as MultiTimeframeAnalysis);
+      }
     } catch (err: unknown) {
       setAnalysisError(err instanceof Error ? err.message : 'Analysis failed');
     } finally {
@@ -266,6 +314,7 @@ export default function Home() {
         >
           <TradingChart
             data={chartData}
+            ticker={displayTicker}
             stopLoss={analysis?.stopLoss}
             takeProfit={analysis?.takeProfit}
             isLoading={isLoadingData}
@@ -286,6 +335,9 @@ export default function Home() {
             ticker={displayTicker}
             currentPrice={currentPrice}
             timeframe={timeframe}
+            mtf={mtfAnalysis}
+            news={news}
+            newsLoading={isLoadingNews}
           />
         </div>
       </main>
