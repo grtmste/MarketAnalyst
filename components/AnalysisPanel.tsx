@@ -269,7 +269,7 @@ export default function AnalysisPanel({
   const horizon = HORIZON[timeframe] ?? `${timeframe} timeframe`;
   if (isLoading) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-5 p-6">
+      <div className="lg:h-full flex flex-col items-center justify-center gap-5 p-6 min-h-[320px]">
         <div className="relative">
           <div className="w-14 h-14 border-2 border-[#7C9CBF]/20 rounded-full" />
           <div className="absolute inset-0 w-14 h-14 border-2 border-[#7C9CBF] border-t-transparent rounded-full animate-spin" />
@@ -297,7 +297,7 @@ export default function AnalysisPanel({
 
   if (error) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6 gap-4">
+      <div className="lg:h-full flex flex-col items-center justify-center p-6 gap-4 min-h-[320px]">
         <div className="w-12 h-12 rounded-2xl bg-[#E07070]/10 flex items-center justify-center">
           <svg className="w-5 h-5 text-[#E07070]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
@@ -313,7 +313,7 @@ export default function AnalysisPanel({
 
   if (!analysis) {
     return (
-      <div className="h-full overflow-y-auto p-4 space-y-3 fade-in-up">
+      <div className="lg:h-full lg:overflow-y-auto p-4 space-y-3 fade-in-up">
         <div className="flex flex-col items-center justify-center gap-5 py-6">
           <div className="w-16 h-16 rounded-2xl bg-[#F0EEF0] flex items-center justify-center">
             <svg className="w-7 h-7 text-[#7C9CBF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
