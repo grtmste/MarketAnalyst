@@ -170,7 +170,7 @@ export default function TradingChart({
     };
   }, []);
 
-  // Update candlestick data and scroll to latest
+  // Update candlestick data and open at a sensible zoom
   useEffect(() => {
     if (!seriesRef.current || data.length === 0) return;
     seriesRef.current.setData(
@@ -182,8 +182,18 @@ export default function TradingChart({
         close: c.close,
       }))
     );
-    // Show the most recent candle at the right edge
-    chartRef.current?.timeScale().scrollToRealTime();
+    // Open focused on the most recent ~110 candles (TradingView-style default
+    // density) rather than dumping the full history. The user can scroll/zoom
+    // back to see the rest; analysis still uses every fetched candle.
+    const DEFAULT_BARS = 110;
+    const ts = chartRef.current?.timeScale();
+    if (ts) {
+      if (data.length > DEFAULT_BARS) {
+        ts.setVisibleLogicalRange({ from: data.length - DEFAULT_BARS, to: data.length + 3 });
+      } else {
+        ts.fitContent();
+      }
+    }
   }, [data]);
 
   // Toggle time-of-day display based on the selected timeframe. Daily+ bars
