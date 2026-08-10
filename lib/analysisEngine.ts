@@ -220,6 +220,7 @@ export function analyzeTechnicals(
     decision,
     confidence,
     reasoning,
+    entryPrice: round(currentPrice),
     stopLoss: round(stopLoss),
     takeProfit: round(takeProfit),
     riskRewardRatio,

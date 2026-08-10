@@ -11,6 +11,7 @@ export interface TradingAnalysis {
   decision: 'BUY' | 'SELL' | 'WAIT';
   confidence: number;
   reasoning: string;
+  entryPrice: number;
   stopLoss: number;
   takeProfit: number;
   riskRewardRatio: number;
