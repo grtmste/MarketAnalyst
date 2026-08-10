@@ -42,6 +42,10 @@ export default function Home() {
   const [currentPrice, setCurrentPrice] = useState<number | undefined>();
 
   const [analysis, setAnalysis] = useState<TradingAnalysis | null>(null);
+  // User-set entry price (e.g. their real broker fill). When set, SL/TP shift
+  // by the same delta so distances and R:R are preserved. null = use the
+  // engine's analysis-time entry.
+  const [entryOverride, setEntryOverride] = useState<number | null>(null);
   const [mtfAnalysis, setMtfAnalysis] = useState<MultiTimeframeAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -82,6 +86,7 @@ export default function Home() {
         if (!silent) {
           setAnalysis(null);
           setMtfAnalysis(null);
+          setEntryOverride(null);
         }
         setDisplayTicker(json.ticker ?? symbol.toUpperCase());
       } catch (err: unknown) {
@@ -160,6 +165,7 @@ export default function Home() {
     setAnalysisError(null);
     setAnalysis(null);
     setMtfAnalysis(null);
+    setEntryOverride(null);
     try {
       const [analysisRes, mtfRes] = await Promise.all([
         fetch('/api/analyze', {
@@ -189,6 +195,14 @@ export default function Home() {
   };
 
   const isBusy = isLoadingData || isAnalyzing;
+
+  // Effective trade levels — shift SL/TP by however far the user moved the
+  // entry from the engine's analysis-time price, keeping distances and R:R.
+  const effectiveEntry = analysis ? entryOverride ?? analysis.entryPrice : undefined;
+  const levelShift =
+    analysis && effectiveEntry !== undefined ? effectiveEntry - analysis.entryPrice : 0;
+  const effectiveStopLoss = analysis ? analysis.stopLoss + levelShift : undefined;
+  const effectiveTakeProfit = analysis ? analysis.takeProfit + levelShift : undefined;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -313,10 +327,10 @@ export default function Home() {
             data={chartData}
             ticker={displayTicker}
             timeframe={timeframe}
-            entry={analysis ? currentPrice : undefined}
+            entry={effectiveEntry}
             decision={analysis?.decision}
-            stopLoss={analysis?.stopLoss}
-            takeProfit={analysis?.takeProfit}
+            stopLoss={effectiveStopLoss}
+            takeProfit={effectiveTakeProfit}
             isLoading={isLoadingData}
             onRefresh={handleRefresh}
             isRefreshing={isRefreshing}
@@ -335,6 +349,11 @@ export default function Home() {
             mtf={mtfAnalysis}
             news={news}
             newsLoading={isLoadingNews}
+            entry={effectiveEntry}
+            stopLoss={effectiveStopLoss}
+            takeProfit={effectiveTakeProfit}
+            entryEdited={entryOverride !== null}
+            onEntryChange={setEntryOverride}
           />
         </div>
       </main>

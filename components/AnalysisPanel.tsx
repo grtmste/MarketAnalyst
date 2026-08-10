@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { TradingAnalysis, MultiTimeframeAnalysis, NewsArticle } from '@/types';
 
 interface Props {
@@ -12,6 +13,12 @@ interface Props {
   mtf?: MultiTimeframeAnalysis | null;
   news?: NewsArticle[];
   newsLoading?: boolean;
+  // Effective trade levels (entry may be user-overridden; SL/TP shift with it).
+  entry?: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  entryEdited?: boolean;
+  onEntryChange?: (value: number | null) => void;
 }
 
 // Human-readable horizon for each timeframe, used in tooltips
@@ -87,6 +94,15 @@ function formatPrice(price: number): string {
   return price.toFixed(4);
 }
 
+// Signed distance of a level from the entry, as "$amount · %". Lets the trader
+// see how far the stop/target sits from entry regardless of the absolute price.
+function levelHint(level: number, entry: number): string {
+  const diff = level - entry;
+  const pct = entry ? (diff / entry) * 100 : 0;
+  const sign = diff >= 0 ? '+' : '−';
+  return `${sign}$${formatPrice(Math.abs(diff))} · ${sign}${Math.abs(pct).toFixed(2)}%`;
+}
+
 function timeAgo(unixSeconds: number): string {
   if (!unixSeconds) return '';
   const diffMs = Date.now() - unixSeconds * 1000;
@@ -150,11 +166,13 @@ function MetricRow({
   value,
   valueColor,
   tooltip,
+  hint,
 }: {
   label: string;
   value: string;
   valueColor?: string;
   tooltip?: string;
+  hint?: string;
 }) {
   return (
     <div className="flex items-center justify-between py-2 border-b border-[rgba(0,0,0,0.04)] last:border-0">
@@ -162,8 +180,82 @@ function MetricRow({
         {label}
         {tooltip && <InfoTooltip text={tooltip} />}
       </span>
-      <span className={`text-xs font-semibold font-mono ${valueColor ?? 'text-[#1A1A2E]'}`}>
-        {value}
+      <span className="flex flex-col items-end leading-tight">
+        <span className={`text-xs font-semibold font-mono ${valueColor ?? 'text-[#1A1A2E]'}`}>
+          {value}
+        </span>
+        {hint && <span className="text-[10px] font-mono text-[#9B98A5] mt-0.5">{hint}</span>}
+      </span>
+    </div>
+  );
+}
+
+// Editable entry-price row: lets the trader type their real broker fill so the
+// SL/TP re-anchor to it (feeds differ, so the app's price rarely matches a
+// broker to the cent). Keeps a local text draft to allow free typing.
+function EntryEditor({
+  entry,
+  edited,
+  onChange,
+}: {
+  entry: number;
+  edited: boolean;
+  onChange: (value: number | null) => void;
+}) {
+  const [draft, setDraft] = useState<string>('');
+  const [focused, setFocused] = useState(false);
+
+  // Mirror the effective entry into the field whenever it changes externally
+  // (new analysis, reset) and the user isn't mid-edit.
+  useEffect(() => {
+    if (!focused) setDraft(String(entry));
+  }, [entry, focused]);
+
+  const commit = (raw: string) => {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      onChange(null);
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed) && parsed > 0) onChange(parsed);
+  };
+
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-[rgba(0,0,0,0.04)]">
+      <span className="flex items-center text-xs text-[#6B7280]">
+        Entry
+        <InfoTooltip text="The price your trade is anchored to. Type your real broker fill here — the app's data feed (Yahoo) rarely matches your broker to the cent, so setting your actual entry re-anchors the Stop Loss and Take Profit while keeping the same distances and risk/reward." />
+      </span>
+      <span className="flex items-center gap-1.5">
+        {edited && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            title="Reset to the analyzed price"
+            className="text-[10px] font-semibold text-[#7C9CBF] hover:text-[#5e7a9a] transition-colors"
+          >
+            reset
+          </button>
+        )}
+        <span className="flex items-center rounded-lg border border-[rgba(0,0,0,0.1)] bg-white px-2 py-1 focus-within:border-[#7C9CBF] focus-within:ring-2 focus-within:ring-[#7C9CBF]/20 transition-all">
+          <span className="text-xs font-mono text-[#9B98A5] mr-0.5">$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={draft}
+            onFocus={() => setFocused(true)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              commit(e.target.value);
+            }}
+            onBlur={() => {
+              setFocused(false);
+              commit(draft);
+            }}
+            className="w-20 bg-transparent text-right text-xs font-semibold font-mono text-[#1A1A2E] focus:outline-none"
+          />
+        </span>
       </span>
     </div>
   );
@@ -265,6 +357,11 @@ export default function AnalysisPanel({
   mtf,
   news,
   newsLoading,
+  entry,
+  stopLoss,
+  takeProfit,
+  entryEdited,
+  onEntryChange,
 }: Props) {
   const horizon = HORIZON[timeframe] ?? `${timeframe} timeframe`;
   if (isLoading) {
@@ -352,8 +449,13 @@ export default function AnalysisPanel({
   const cfg = DECISION_CONFIG[analysis.decision];
   const rrRatio = analysis.riskRewardRatio?.toFixed(2) ?? 'N/A';
 
+  // Effective trade levels (fall back to the raw analysis if not supplied).
+  const effEntry = entry ?? analysis.entryPrice;
+  const effStopLoss = stopLoss ?? analysis.stopLoss;
+  const effTakeProfit = takeProfit ?? analysis.takeProfit;
+
   return (
-    <div className="h-full overflow-y-auto p-4 space-y-3 fade-in-up">
+    <div className="lg:h-full lg:overflow-y-auto p-4 space-y-3 fade-in-up">
       {/* Decision */}
       <Card className={`p-4 border ${cfg.borderClass} ${cfg.bgClass}`}>
         <div className="flex items-center justify-between mb-3">
@@ -424,20 +526,25 @@ export default function AnalysisPanel({
 
       {/* Price Levels */}
       <Card className="p-4">
-        <SectionLabel tooltip={`These levels are sized for a ${horizon} trade. They come from ATR(14) — average volatility over the last 14 ${timeframe} candles — so switching the timeframe rescales them.`}>
+        <SectionLabel tooltip={`These levels are sized for a ${horizon} trade. They come from ATR(14) — average volatility over the last 14 ${timeframe} candles — so switching the timeframe rescales them. Set your real broker entry below to re-anchor them to your fill.`}>
           Price Levels
         </SectionLabel>
+        {entry !== undefined && onEntryChange && (
+          <EntryEditor entry={entry} edited={!!entryEdited} onChange={onEntryChange} />
+        )}
         <MetricRow
           label="Stop Loss"
-          value={`$${formatPrice(analysis.stopLoss)}`}
+          value={`$${formatPrice(effStopLoss)}`}
           valueColor="text-[#c45c5c]"
-          tooltip={`Suggested exit if the trade goes against you, placed 1.5×ATR from the entry. ATR is measured on the ${horizon} chart, so this stop is tuned for that trade horizon — tighter on 1M, wider on 1D.`}
+          hint={levelHint(effStopLoss, effEntry)}
+          tooltip={`Suggested exit if the trade goes against you, placed 1.5×ATR from the entry. ATR is measured on the ${horizon} chart, so this stop is tuned for that trade horizon — tighter on 1M, wider on 1D. Moves with your entry.`}
         />
         <MetricRow
           label="Take Profit"
-          value={`$${formatPrice(analysis.takeProfit)}`}
+          value={`$${formatPrice(effTakeProfit)}`}
           valueColor="text-[#3a9668]"
-          tooltip={`Suggested exit to lock in gains, placed 3×ATR from the entry on the ${horizon} chart. Twice the distance of the stop, which is what gives the 1:2 risk/reward.`}
+          hint={levelHint(effTakeProfit, effEntry)}
+          tooltip={`Suggested exit to lock in gains, placed 3×ATR from the entry on the ${horizon} chart. Twice the distance of the stop, which is what gives the 1:2 risk/reward. Moves with your entry.`}
         />
         <MetricRow
           label="Risk / Reward"
@@ -445,7 +552,7 @@ export default function AnalysisPanel({
           valueColor={
             analysis.riskRewardRatio >= 2 ? 'text-[#3a9668]' : 'text-[#F0A854]'
           }
-          tooltip="Potential reward versus risk. 1:2 means you aim to make twice what you'd lose if stopped out. A ratio of 1:2 or higher is generally considered favorable."
+          tooltip="Potential reward versus risk. 1:2 means you aim to make twice what you'd lose if stopped out. A ratio of 1:2 or higher is generally considered favorable. Unchanged when you edit the entry — only the price levels shift."
         />
       </Card>
 
